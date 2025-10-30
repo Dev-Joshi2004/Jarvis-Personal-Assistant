@@ -1,4 +1,4 @@
-// Home.js (FINAL VERSION - PRODUCTION READY with Voice Fixes)
+// Home.js (FINAL VERSION - PRODUCTION READY with all latest fixes)
 "use client";
 import { useState, useEffect, useRef } from "react"; 
 import Visualizer from './components/Visualizer'; 
@@ -29,14 +29,11 @@ export default function Home() {
     
     const loadVoices = () => {
         const voices = synth.getVoices();
-        // केवल hi-IN और en-US/en-IN voices को फ़िल्टर करें
         setAvailableVoices(voices.filter(v => v.lang.startsWith('hi') || v.lang.startsWith('en')));
     };
     
-    // Voiceschanged इवेंट को सीधे जोड़ें
     synth.addEventListener('voiceschanged', loadVoices);
     
-    // एक छोटा सा डिले दें ताकि ब्राउज़र Voices को लोड करने के लिए मजबूर हो
     const timer = setTimeout(() => {
         if (synth.getVoices().length > 0) {
             loadVoices();
@@ -46,6 +43,11 @@ export default function Home() {
     return () => {
       clearTimeout(timer);
       synth.removeEventListener('voiceschanged', loadVoices);
+      
+      // 🚨 FIX 3: पेज अनमाउंट होने (रिफ्रेश/बंद) पर बोलना तुरंत बंद करें
+      if (window.speechSynthesis && window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+      }
     };
   }, []);
 
@@ -66,15 +68,33 @@ export default function Home() {
     
     utterance.rate = 0.85; 
     utterance.pitch = 1.1; 
-    utterance.lang = 'hi-IN';
-    
-    const selectedVoice = availableVoices.find(
-        (voice) => (voice.lang === 'hi-IN' && voice.name.includes('Google')) ||
-                   (voice.lang === 'en-IN' && voice.name.includes('Google')) ||
-                   (voice.lang === 'en-US' && voice.default) 
+    utterance.lang = 'hi-IN'; // Fallback to Hindi
+
+    // 🚨 FIX 2: Male Voice Selection Logic
+    // 1. Google US Male voice खोजें
+    let selectedVoice = availableVoices.find(
+        (voice) => voice.lang === 'en-US' && (voice.name.includes('Male') || voice.name.includes('Standard'))
     );
 
+    // 2. अगर US Male नहीं मिलता, तो Google India (Male/Standard) खोजें 
+    if (!selectedVoice) {
+        selectedVoice = availableVoices.find(
+            (voice) => voice.lang === 'en-IN' && (voice.name.includes('Male') || voice.name.includes('Standard'))
+        );
+    }
+    
+    // 3. अगर Male voice नहीं मिलती, तो कोई भी Hindi या Default voice चुनें
+    if (!selectedVoice) {
+        selectedVoice = availableVoices.find(
+            (voice) => voice.lang === 'hi-IN'
+        ) || availableVoices.find(
+            (voice) => voice.default
+        );
+    }
+    
     if (selectedVoice) {
+        // अगर Hindi voice मिली है, तो lang को Hindi पर सेट करें, नहीं तो English (US/IN) पर
+        utterance.lang = selectedVoice.lang;
         utterance.voice = selectedVoice;
     } 
 
@@ -92,7 +112,6 @@ useEffect(() => {
   let i = 0;
   setDisplayedResponse("");
   
-  // पुरानी आवाज़ को तुरंत रोकें, ताकि नई आवाज़ शुरू हो सके
   if (window.speechSynthesis && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
   }
@@ -102,7 +121,6 @@ useEffect(() => {
       clearInterval(interval);
       setDisplayedResponse(response); 
       
-      // 🗣️ Voice Output: जब टेक्स्ट पूरा टाइप हो जाए
       speakResponse(response); 
       
       setResponse(""); 
@@ -182,7 +200,6 @@ function extractCommandIfWakeWord(raw) {
 // 💡 NEW FUNCTION: Handles Voice Input (Speech-to-Text)
 const startListening = () => {
 
-    // सुनिश्चित करें कि कोई TTS चल रहा है तो वह रुक जाए
     if (window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
     }
@@ -211,15 +228,11 @@ const startListening = () => {
         const transcript = event.results[0][0].transcript;
         console.log('Voice Input:', transcript);
 
-        // 1. इनपुट फ़ील्ड को भरें (टेक्स्ट दिखेगा)
+        // 🚨 FIX 1: इनपुट फ़ील्ड को भरें, लेकिन ऑटोमैटिकली सबमिट न करें।
         setInput(transcript); 
         
-        // 2. ऑटोमेटिकली कमांड सबमिट करें 
-        setTimeout(() => {
-          handleSubmit({ preventDefault: () => {} });
-        }, 300);
+        // setLoading को यहीं false न करें, recognition.onend में करेंगे
     }; 
-    // 👆 यह onresult का सही अंत है, इसके बाद कोई '}' नहीं है।
 
     recognition.onerror = (event) => {
       setLoading(false);
@@ -233,8 +246,15 @@ const startListening = () => {
     }; 
 
     recognition.onend = () => {
+        // Voice input पूरा होने पर UI को साफ़ करें, लेकिन input को नहीं
+        setLoading(false); 
         setResponse(""); 
         setDisplayedResponse(""); 
+        
+        // Voice Input के बाद, फोकस इनपुट फील्ड पर वापस लाएं
+        if (inputRef.current) {
+            inputRef.current.focus();
+        }
     };
 
     try {
