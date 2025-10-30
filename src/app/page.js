@@ -1,103 +1,509 @@
-import Image from "next/image";
+// Home.js (FINAL VERSION - PRODUCTION READY)
+"use client";
+import { useState, useEffect, useRef } from "react"; 
+import Visualizer from './components/Visualizer'; 
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [input, setInput] = useState("");
+  const [response, setResponse] = useState(""); 
+  const [displayedResponse, setDisplayedResponse] = useState(""); 
+  const [userMessage, setUserMessage] = useState(""); 
+  const [loading, setLoading] = useState(false);
+  // UI के लिए इस्तेमाल होने वाला इतिहास (Friendly Hinglish टेक्स्ट)
+  const [conversationHistory, setConversationHistory] = useState([]);
+  
+  // Backend को भेजने के लिए RAW इतिहास (कमांड्स)
+  const [rawBackendHistory, setRawBackendHistory] = useState([]);
+  
+  // URL/Command to be executed by a user click
+  const [commandToExecute, setCommandToExecute] = useState(null); 
+  const [availableVoices, setAvailableVoices] = useState([]); // वक्ताओं को लोड करने के लिए
+  const [isTtsActive, setIsTtsActive] = useState(false);
+  
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null); 
+  
+  const AI_NAME = "J.A.R.V.I.S";
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+  // Check if AI is speaking (either typing or responding via voice)
+  const isSpeaking = loading || (response && displayedResponse.length < response.length) || isTtsActive;
+
+
+  // 💡 useEffect to load and store all available voices once (FIX for voice stability)
+  useEffect(() => {
+    const synth = window.speechSynthesis;
+    
+    const loadVoices = () => {
+        setAvailableVoices(synth.getVoices());
+    };
+
+    if (synth.getVoices().length > 0) {
+        loadVoices();
+    } 
+    
+    synth.addEventListener('voiceschanged', loadVoices);
+
+    return () => {
+        synth.removeEventListener('voiceschanged', loadVoices);
+    };
+  }, []);
+
+  // 💡 NEW FUNCTION: Handles Voice Output (Text-to-Speech)
+  const speakResponse = (text) => {
+    const synth = window.speechSynthesis;
+    if (!synth || !text) return;
+
+    // 1. पुरानी आवाज़ को तुरंत रोकें
+    if (synth.speaking) {
+        synth.cancel();
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    // 💡 NEW: बोलने से पहले TTS State को TRUE करें
+    utterance.onstart = () => setIsTtsActive(true);
+    
+    // 💡 NEW: बोलने के बाद TTS State को FALSE करें
+    utterance.onend = () => setIsTtsActive(false); 
+    utterance.onerror = () => setIsTtsActive(false); // एरर होने पर भी बंद करें
+    
+    // Voice Settings (आप इन्हें बदल सकते हैं)
+    utterance.rate = 0.85; 
+    utterance.pitch = 1.1; 
+    utterance.lang = 'hi-IN'; // Default language setting
+    
+    // 2. स्टोर्ड voices से सबसे अच्छी आवाज़ चुनें
+    const selectedVoice = availableVoices.find(
+        (voice) => (voice.lang === 'hi-IN' && voice.name.includes('Google')) ||
+                   (voice.lang === 'en-IN' && voice.name.includes('Google')) ||
+                   (voice.lang === 'en-US' && voice.default) 
+    );
+
+    if (selectedVoice) {
+        utterance.voice = selectedVoice;
+    } 
+
+    // 3. आवाज़ शुरू करें
+    try {
+        synth.speak(utterance);
+    } catch(e) {
+        console.error("Error speaking:", e);
+    }
+  };
+  
+// 🌀 Typing animation effect
+useEffect(() => {
+  if (!response) return;
+
+  let i = 0;
+  setDisplayedResponse("");
+  
+  const interval = setInterval(() => {
+    if (i >= response.length) {
+      clearInterval(interval);
+      setDisplayedResponse(response); 
+      
+      // 🗣️ Voice Output: जब टेक्स्ट पूरा टाइप हो जाए
+      speakResponse(response); 
+      
+      setResponse(""); 
+      return;
+    }
+    setDisplayedResponse((prev) => prev + response.charAt(i));
+    i++;
+  }, 25); 
+
+  return () => {
+    clearInterval(interval);
+    // यह सुनिश्चित करें कि जब नया रिस्पॉन्स आए, तो पिछली आवाज़ कट जाए।
+    if (window.speechSynthesis && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+    }
+  };
+}, [response]);
+
+
+// 💡 Auto-scroll effect
+useEffect(() => {
+    if (messagesEndRef.current) {
+        messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
+    }
+}, [conversationHistory, displayedResponse, loading, commandToExecute]); 
+
+
+// 💡 Function to handle editing the last message
+function handleEditLastMessage() {
+  if (conversationHistory.length >= 2) {
+    const lastUserMessage = conversationHistory[conversationHistory.length - 2];
+    
+    if (lastUserMessage.role === "user") {
+      setInput(lastUserMessage.content);
+      setConversationHistory(prev => prev.slice(0, prev.length - 2)); 
+      setRawBackendHistory(prev => prev.slice(0, prev.length - 2)); 
+      setCommandToExecute(null); 
+      
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }
+  }
+}
+
+
+// Helper: extractCommandIfWakeWord
+function extractCommandIfWakeWord(raw) {
+    if (!raw || !raw.trim()) return null;
+    const s = raw.trim(); 
+    const s_lower = s.toLowerCase(); 
+    const negations = ["not", "don't", "dont", "never", "no"];
+    
+    // 🚨 FINAL PATTERN SET:
+    const patterns = [
+      "\\bhey jarvis\\b", 
+      "\\bhello jarvis\\b", 
+      "\\bwake up jarvis\\b",
+      "\\bwake jarvis\\b", 
+      "\\butho jarvis\\b", 
+      "\\butho\\b.*\\bjarvis\\b",
+      "\\bjarvis\\b", 
+      "\\bsuno\\s*jarvis\\b" // FINAL FIX: Zero or more spaces (\s*)
+    ];
+    
+    const regex = new RegExp(patterns.join("|"), "i");
+    const match = s_lower.match(regex);
+    if (!match) return null;
+    for (const neg of negations) {
+      if (s_lower.includes(`${neg} jarvis`) || s_lower.includes(`${neg} hey jarvis`)) {
+        return null;
+      }
+    }
+    let cleaned = s.slice(0, match.index) + s.slice(match.index + match[0].length);
+    const cleanupRegex = /^(,|:|\s)+|(,|:|\s)+$/g;
+    cleaned = cleaned.replace(cleanupRegex, "").trim();
+    return cleaned;
+}
+// End of helper function
+
+
+// 💡 NEW FUNCTION: Handles Voice Input (Speech-to-Text)
+const startListening = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    // Firefox check is now removed for simplicity, rely on SpeechRecognition check
+    if (!SpeechRecognition) {
+        alert("Sorry, Sir, your browser does not support Voice Input. Please use Chrome or Edge.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false; 
+    recognition.interimResults = false; 
+    recognition.lang = 'hi-IN'; // For Hinglish
+    recognition.maxAlternatives = 1;
+
+    setLoading(true); 
+
+    recognition.onstart = () => {
+        setResponse("Listening...");
+        setDisplayedResponse("Listening...");
+    };
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        console.log('Voice Input:', transcript);
+
+        // 1. इनपुट फ़ील्ड को भरें
+        setInput(transcript); 
+        
+        // 2. ऑटोमेटिकली कमांड सबमिट करें (फेक इवेंट ऑब्जेक्ट)
+        handleSubmit({ preventDefault: () => {} }); 
+    };
+
+    recognition.onerror = (event) => {
+        setLoading(false);
+        setResponse("");
+        if (event.error === 'not-allowed') {
+            alert("Sir, please allow microphone access in your browser settings.");
+        } else if (event.error === 'no-speech') {
+             setDisplayedResponse("Didn't catch that, Sir. Please try again.");
+             speakResponse("I didn't catch that, Sir. Please try again.");
+        }
+    };
+
+    recognition.onend = () => {
+        setResponse(""); 
+        setDisplayedResponse(""); 
+        if (inputRef.current) inputRef.current.focus();
+    };
+
+    try {
+        recognition.start();
+    } catch (e) {
+        console.error("Error starting recognition:", e);
+        setLoading(false);
+        alert("Error starting voice input. Is the microphone in use by another app?");
+    }
+};
+
+
+// 💡 Executes the command when the user clicks the action button
+const executeCommand = () => {
+    if (!commandToExecute) return;
+
+    let url = commandToExecute;
+    
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+    }
+
+    window.open(url, "_blank");
+    
+    setCommandToExecute(null); 
+    if (inputRef.current) inputRef.current.focus();
+};
+
+
+async function handleSubmit(e) {
+  e.preventDefault();
+  
+  const isFakeEvent = !e.target; // Check if it's the fake event from voice input
+  
+  if (!input.trim()) {
+      if (!isFakeEvent) {
+          setLoading(false); 
+          return;
+      }
+  }
+
+  // Stop any ongoing speech when a new command is sent
+  if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+  }
+  
+  setCommandToExecute(null); 
+
+  const currentInput = input.trim();
+  let command = currentInput 
+
+  if(conversationHistory.length === 0){
+    command = extractCommandIfWakeWord(currentInput);
+    if (command === null) {
+      setUserMessage(currentInput); 
+      setInput("");
+      const wakeUpMsg = `⚠️ Sir, please shuruat '${AI_NAME}' se kijiye taki mujhe pata chale ki aap mujhse baat kar rahe hain.`;
+      setResponse(wakeUpMsg);
+      
+      setTimeout(() => setUserMessage(""), 1500); 
+      return;
+    }
+  }
+  
+  // 1. Prepare UI states
+  setUserMessage(currentInput); 
+  setInput("");
+  setLoading(true);
+  setResponse("");
+  setDisplayedResponse(""); 
+
+  let finalUserFriendlyResponse = "Error talking to AI 😢";
+  let rawModelReply = "Error talking to AI 😢"; 
+  let uiModelContent = null; 
+
+
+  try {
+    // CRITICAL FIX: Backend को भेजने के लिए rawBackendHistory का उपयोग करें
+    const historyToSend = [...rawBackendHistory, { role: "user", content : command }]; 
+
+    const res = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ history: historyToSend }),
+    });
+
+    const data = await res.json();
+    const modelReply = data.reply || "No response from AI 🤖";
+    
+    rawModelReply = modelReply; 
+    finalUserFriendlyResponse = modelReply;
+    uiModelContent = modelReply; 
+    
+    // --- COMMAND HANDLING: Set Friendly Response & Command State ---
+    
+    if (modelReply.startsWith("__OPEN_YOUTUBE__")) {
+        finalUserFriendlyResponse = "Ji Sir, main YouTube khol raha hoon. Niche diye gaye button par click kijiye, Sir.";
+        setCommandToExecute("https://www.youtube.com");
+        uiModelContent = finalUserFriendlyResponse;
+        
+    } else if (modelReply.startsWith("__OPEN_GOOGLE__")) {
+        finalUserFriendlyResponse = "Google Search open ho raha hai, Sir. Niche diye gaye button par click kijiye, Sir.";
+        setCommandToExecute("https://www.google.com");
+        uiModelContent = finalUserFriendlyResponse;
+
+    } else if (modelReply.startsWith("__OPEN_GMAIL__")) {
+        finalUserFriendlyResponse = "Gmail khol raha hoon, Sir. Niche diye gaye button par click kijiye, Sir.";
+        setCommandToExecute("https://mail.google.com");
+        uiModelContent = finalUserFriendlyResponse;
+
+    }else if (modelReply.startsWith("__SEARCH_YOUTUBE__")) {
+        const query = modelReply.replace("__SEARCH_YOUTUBE__:", "").trim();
+        finalUserFriendlyResponse = `Aapki request par, main YouTube par "${query}" search kar raha hoon, Sir. Niche diye gaye button par click kijiye.`;
+        setCommandToExecute(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`);
+        uiModelContent = finalUserFriendlyResponse;
+
+    }else if (modelReply.startsWith("__OPEN_URL__:")) {
+        let url = modelReply.replace("__OPEN_URL__:", "").trim();
+        
+        let displayUrl = url;
+        try {
+          displayUrl = new URL(url.startsWith('http') ? url : 'https://+ url').hostname.replace('www.', ''); 
+        } catch (e) { }
+
+        finalUserFriendlyResponse = `Ji Sir, main aapke liye ${displayUrl} khol raha hoon. Kripya niche diye gaye button par click kijiye.`;
+        setCommandToExecute(url);
+        uiModelContent = finalUserFriendlyResponse;
+    }
+     else {
+      finalUserFriendlyResponse = modelReply;
+      setCommandToExecute(null); 
+    }
+
+  } catch (err) {
+    console.error(err);
+    finalUserFriendlyResponse = "Error talking to AI 😢";
+    rawModelReply = "Error talking to AI 😢";
+    uiModelContent = "Error talking to AI 😢"; 
+    setCommandToExecute(null); 
+  } 
+  
+  // 2. Update Backend History (Use RAW reply)
+  const rawUserMessage = { role: "user", content : command }; 
+  const rawModelMessage = { role: "model", content: rawModelReply}; 
+  setRawBackendHistory(prev => [...prev, rawUserMessage, rawModelMessage]);
+
+  // 3. Update UI History (Use FRIENDLY reply)
+  const uiUserMessage = { role: "user", content : currentInput };
+  const uiModelMessage = { role: "model", content: uiModelContent}; 
+  setConversationHistory(prev => [...prev, uiUserMessage, uiModelMessage]);
+  
+  // 4. Start the typing animation (ALWAYS use the friendly text for UI)
+  setResponse(finalUserFriendlyResponse);
+  
+  // 5. Cleanup
+  setLoading(false);
+  setUserMessage("");
+}
+
+function handleEnter(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    handleSubmit(e);
+  }
+}
+
+return (
+  <main className="min-h-screen bg-black text-white flex flex-col items-center p-6 pt-16">
+    <h1 className="text-4xl font-extrabold mb-8 text-cyan-400 drop-shadow-lg tracking-wider">{AI_NAME}</h1>
+    <p className="text-gray-500 mb-6 text-sm">Artificial Intelligence Protocol</p>
+
+    {/* 🖼️ AI Visualizer (Siri Style) */}
+    <Visualizer isSpeaking={isSpeaking} />
+
+    {/* 🧍 User + AI conversation box */}
+    {(conversationHistory.length > 0 || userMessage) && ( 
+      <div 
+        ref={messagesEndRef} 
+        className="w-full max-w-lg bg-gray-900/80 backdrop-blur-sm p-5 rounded-xl shadow-2xl border border-blue-900/50 h-80 overflow-y-auto flex flex-col space-y-4"
+      >
+          
+          {/* 1. RENDER FULL CONVERSATION HISTORY */}
+          {conversationHistory.map((message, index) => (
+              <div 
+                  key={index} 
+                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                  <div className={`max-w-xs p-3 rounded-xl ${message.role === "user" ? "bg-blue-600/90 text-white rounded-br-none" : "bg-gray-700/80 text-gray-200 rounded-tl-none"} flex flex-col`}>
+                      <p className="whitespace-pre-wrap">
+                          {message.role !== "user" && <span className="font-bold text-cyan-400">{AI_NAME}:</span>}
+                          {message.content}
+                      </p>
+                      
+                      {/* 💡 EDIT BUTTON: Only visible on the last user message */}
+                      {message.role === "user" && index === conversationHistory.length - 2 && !loading && !isSpeaking && (
+                          <button
+                              onClick={handleEditLastMessage}
+                              className="mt-1 self-end text-xs text-gray-200 hover:text-cyan-300 transition-colors opacity-80"
+                              title="Edit previous message"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block mr-1"><path d="M12 20h9"/><path d="M16.5 3.5l4 4"/><path d="M18 6L14 10"/><path d="M3 15v3a2 2 0 0 0 2 2h3.5L18 8.5 15.5 6 3 18.5Z"/></svg>
+                            Edit
+                          </button>
+                      )}
+                  </div>
+              </div>
+          ))}
+
+          {/* 2. RENDER THE CURRENT TYPING/LOADING RESPONSE (AFTER history) */}
+          {(loading || isSpeaking) && (
+              <div className="flex justify-start">
+                  <div className="max-w-xs p-3 rounded-xl bg-gray-700/80 text-gray-200 rounded-tl-none">
+                      <p className="whitespace-pre-wrap">
+                        <span className="font-bold text-cyan-400">{AI_NAME}:</span> 
+                        {loading && !response ? " Thinking..." : ` ${displayedResponse}`}
+                      </p>
+                  </div>
+              </div>
+          )}
+      </div>
+    )}
+
+    {/* 🚨 Action Button for Pop-up Blocker Avoidance */}
+{commandToExecute && (
+    <div className="w-full max-w-lg mt-4 p-4 bg-yellow-900/40 border border-yellow-500/50 rounded-xl shadow-lg text-center">
+        <p className="text-sm text-yellow-200 mb-3">
+            ⚠️ Security: Browser ki rok-tok se bachne ke liye, kripya website kholne ke liye niche click karein.
+        </p>
+        <button
+            onClick={executeCommand}
+            className="w-full p-3 bg-yellow-500 rounded-xl hover:bg-yellow-600 transition-colors duration-200 font-semibold tracking-wide text-gray-900"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+            👉 Open Website Now 🌐
+        </button>
     </div>
-  );
+)}
+
+    {/* 🖊️ Input form (VIO Ready) */}
+    <form onSubmit={handleSubmit} className="w-full max-w-lg space-y-4 mt-8">
+      <div className="flex space-x-2 items-center">
+          <textarea
+              ref={inputRef} 
+              className="flex-grow p-3 rounded-xl bg-gray-800 text-white outline-none border border-blue-700 focus:border-cyan-500 max-h-[100px] overflow-auto min-h-[50px] resize-none text-base"
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={conversationHistory.length === 0 ? `Start with '${AI_NAME}...' or ask something.` : "Continue the conversation..."}
+              onKeyDown={handleEnter}
+          />
+
+          {/* 🎙️ Microphone Button (Voice Input) */}
+          <button
+              type="button" 
+              onClick={startListening}
+              disabled={loading} // जब AI सोच रहा हो या सुन रहा हो, तब इसे डिसेबल करें
+              className="w-12 h-12 flex items-center justify-center bg-cyan-600 rounded-full hover:bg-cyan-700 transition-all duration-200 shadow-lg text-white disabled:opacity-50"
+              title="Voice Input"
+          >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          </button>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading || !input.trim()}
+        className="w-full p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors duration-200 disabled:opacity-30 font-semibold tracking-wide"
+      >
+        {loading ? "Processing Command..." : `Send to ${AI_NAME}`}
+      </button>
+    </form>
+  </main>
+);
 }
