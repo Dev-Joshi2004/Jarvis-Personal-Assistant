@@ -37,14 +37,16 @@ export default function Home() {
         setAvailableVoices(synth.getVoices());
     };
 
-    if (synth.getVoices().length > 0) {
+    const timer = setTimeout(() => {
+      if (synth.getVoices().length > 0) {
         loadVoices();
-    } 
-    
-    synth.addEventListener('voiceschanged', loadVoices);
+      }
+      synth.addEventListener('voiceschanged', loadVoices)
+    },1500);
 
     return () => {
-        synth.removeEventListener('voiceschanged', loadVoices);
+      clearTimeout(timer); // Timer को साफ़ करें
+      synth.removeEventListener('voiceschanged', loadVoices);
     };
   }, []);
 
@@ -187,62 +189,69 @@ function extractCommandIfWakeWord(raw) {
 
 // 💡 NEW FUNCTION: Handles Voice Input (Speech-to-Text)
 const startListening = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    // Firefox check is now removed for simplicity, rely on SpeechRecognition check
-    if (!SpeechRecognition) {
-        alert("Sorry, Sir, your browser does not support Voice Input. Please use Chrome or Edge.");
-        return;
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+      alert("Sorry, Sir, your browser does not support Voice Input. Please use Chrome or Edge.");
+      return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.continuous = false; 
+  recognition.interimResults = false; 
+  recognition.lang = 'hi-IN'; // For Hinglish
+  recognition.maxAlternatives = 1;
+
+  setLoading(true); 
+
+  recognition.onstart = () => {
+      setResponse("Listening...");
+      setDisplayedResponse("Listening...");
+  };
+
+  recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      console.log('Voice Input:', transcript);
+
+      // 1. इनपुट फ़ील्ड को भरें
+      setInput(transcript); 
+      
+      // 2. ऑटोमेटिकली कमांड सबमिट करें (फेक इवेंट ऑब्जेक्ट)
+      setTimeout(() => {
+        handleSubmit({ preventDefault: () => {} });
+      }, 300);
+  }; // <-- onresult का सही अंत
+
+  // यह onresult के बाहर है, startListening के अंदर है
+  recognition.onerror = (event) => {
+    setLoading(false);
+    setResponse("");
+    if (event.error === 'not-allowed') {
+        alert("Sir, please allow microphone access in your browser settings.");
+    } else if (event.error === 'no-speech') {
+         setDisplayedResponse("Didn't catch that, Sir. Please try again.");
+         speakResponse("I didn't catch that, Sir. Please try again.");
     }
+  }; // <-- onerror का सही अंत
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false; 
-    recognition.interimResults = false; 
-    recognition.lang = 'hi-IN'; // For Hinglish
-    recognition.maxAlternatives = 1;
+  recognition.onend = () => {
+      setResponse(""); 
+      setDisplayedResponse(""); 
+      //if (inputRef.current) inputRef.current.focus();
+  };
 
-    setLoading(true); 
-
-    recognition.onstart = () => {
-        setResponse("Listening...");
-        setDisplayedResponse("Listening...");
-    };
-
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        console.log('Voice Input:', transcript);
-
-        // 1. इनपुट फ़ील्ड को भरें
-        setInput(transcript); 
-        
-        // 2. ऑटोमेटिकली कमांड सबमिट करें (फेक इवेंट ऑब्जेक्ट)
-        handleSubmit({ preventDefault: () => {} }); 
-    };
-
-    recognition.onerror = (event) => {
-        setLoading(false);
-        setResponse("");
-        if (event.error === 'not-allowed') {
-            alert("Sir, please allow microphone access in your browser settings.");
-        } else if (event.error === 'no-speech') {
-             setDisplayedResponse("Didn't catch that, Sir. Please try again.");
-             speakResponse("I didn't catch that, Sir. Please try again.");
-        }
-    };
-
-    recognition.onend = () => {
-        setResponse(""); 
-        setDisplayedResponse(""); 
-        if (inputRef.current) inputRef.current.focus();
-    };
-
-    try {
-        recognition.start();
-    } catch (e) {
-        console.error("Error starting recognition:", e);
-        setLoading(false);
-        alert("Error starting voice input. Is the microphone in use by another app?");
-    }
+  try {
+      recognition.start();
+  } catch (e) {
+      console.error("Error starting recognition:", e);
+      setLoading(false);
+      alert("Error starting voice input. Is the microphone in use by another app?");
+  }
 };
 
 
@@ -472,38 +481,44 @@ return (
 )}
 
     {/* 🖊️ Input form (VIO Ready) */}
-    <form onSubmit={handleSubmit} className="w-full max-w-lg space-y-4 mt-8">
-      <div className="flex space-x-2 items-center">
+<form onSubmit={handleSubmit} className="w-full max-w-lg space-y-4 mt-8">
+  <div className="flex space-x-2 items-center"> 
+      {/* 1. TEXTAREA CONTAINER: यहां Send बटन भी आएगा */}
+      <div className="flex-grow relative"> 
           <textarea
               ref={inputRef} 
-              className="flex-grow p-3 rounded-xl bg-gray-800 text-white outline-none border border-blue-700 focus:border-cyan-500 max-h-[100px] overflow-auto min-h-[50px] resize-none text-base"
-              type="text"
+              className="w-full p-3 pr-[100px] rounded-xl bg-gray-800 text-white outline-none border border-blue-700 focus:border-cyan-500 max-h-[100px] overflow-auto min-h-[50px] resize-none text-base"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={conversationHistory.length === 0 ? `Start with '${AI_NAME}...' or ask something.` : "Continue the conversation..."}
               onKeyDown={handleEnter}
+              style={{ paddingRight: '90px' }} // बटन के लिए जगह
           />
-
-          {/* 🎙️ Microphone Button (Voice Input) */}
+          
+          {/* 💡 SEND BUTTON (INPUT BOX के अंदर RIGHT SIDE में) */}
           <button
-              type="button" 
-              onClick={startListening}
-              disabled={loading} // जब AI सोच रहा हो या सुन रहा हो, तब इसे डिसेबल करें
-              className="w-12 h-12 flex items-center justify-center bg-cyan-600 rounded-full hover:bg-cyan-700 transition-all duration-200 shadow-lg text-white disabled:opacity-50"
-              title="Voice Input"
+              type="submit"
+              disabled={loading || !input.trim()}
+              // absolute पोजीशनिंग हटाकर इसे फ्लेक्स में ही रखते हैं, ताकि यह टेक्स्टएरिया के बगल में आए
+              className="absolute right-2 inset-y-0 my-auto w-8 h-8 flex items-center justify-center bg-blue-600 rounded-md hover:bg-blue-700 transition-colors duration-200 disabled:opacity-30 shadow-md text-white"
+              title="Send"
           >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transform rotate-45 -translate-y-[1px] translate-x-[1px]"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
       </div>
 
+      {/* 🎙️ Microphone Button (यह अपनी जगह पर रहेगा) */}
       <button
-        type="submit"
-        disabled={loading || !input.trim()}
-        className="w-full p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors duration-200 disabled:opacity-30 font-semibold tracking-wide"
+          type="button" 
+          onClick={startListening}
+          disabled={loading}
+          className="w-12 h-12 flex items-center justify-center bg-cyan-600 rounded-full hover:bg-cyan-700 transition-all duration-200 shadow-lg text-white disabled:opacity-50 flex-shrink-0"
+          title="Voice Input"
       >
-        {loading ? "Processing Command..." : `Send to ${AI_NAME}`}
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
       </button>
-    </form>
+  </div>
+</form>
   </main>
 );
 }
