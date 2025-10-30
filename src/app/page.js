@@ -1,4 +1,4 @@
-// Home.js (FINAL VERSION - PRODUCTION READY)
+// Home.js (FINAL VERSION - PRODUCTION READY with Voice Fixes)
 "use client";
 import { useState, useEffect, useRef } from "react"; 
 import Visualizer from './components/Visualizer'; 
@@ -9,15 +9,10 @@ export default function Home() {
   const [displayedResponse, setDisplayedResponse] = useState(""); 
   const [userMessage, setUserMessage] = useState(""); 
   const [loading, setLoading] = useState(false);
-  // UI के लिए इस्तेमाल होने वाला इतिहास (Friendly Hinglish टेक्स्ट)
   const [conversationHistory, setConversationHistory] = useState([]);
-  
-  // Backend को भेजने के लिए RAW इतिहास (कमांड्स)
   const [rawBackendHistory, setRawBackendHistory] = useState([]);
-  
-  // URL/Command to be executed by a user click
   const [commandToExecute, setCommandToExecute] = useState(null); 
-  const [availableVoices, setAvailableVoices] = useState([]); // वक्ताओं को लोड करने के लिए
+  const [availableVoices, setAvailableVoices] = useState([]); 
   const [isTtsActive, setIsTtsActive] = useState(false);
   
   const messagesEndRef = useRef(null);
@@ -25,7 +20,6 @@ export default function Home() {
   
   const AI_NAME = "J.A.R.V.I.S";
 
-  // Check if AI is speaking (either typing or responding via voice)
   const isSpeaking = loading || (response && displayedResponse.length < response.length) || isTtsActive;
 
 
@@ -34,18 +28,23 @@ export default function Home() {
     const synth = window.speechSynthesis;
     
     const loadVoices = () => {
-        setAvailableVoices(synth.getVoices());
+        const voices = synth.getVoices();
+        // केवल hi-IN और en-US/en-IN voices को फ़िल्टर करें
+        setAvailableVoices(voices.filter(v => v.lang.startsWith('hi') || v.lang.startsWith('en')));
     };
-
+    
+    // Voiceschanged इवेंट को सीधे जोड़ें
+    synth.addEventListener('voiceschanged', loadVoices);
+    
+    // एक छोटा सा डिले दें ताकि ब्राउज़र Voices को लोड करने के लिए मजबूर हो
     const timer = setTimeout(() => {
-      if (synth.getVoices().length > 0) {
-        loadVoices();
-      }
-      synth.addEventListener('voiceschanged', loadVoices)
-    },1500);
+        if (synth.getVoices().length > 0) {
+            loadVoices();
+        }
+    }, 1500); 
 
     return () => {
-      clearTimeout(timer); // Timer को साफ़ करें
+      clearTimeout(timer);
       synth.removeEventListener('voiceschanged', loadVoices);
     };
   }, []);
@@ -55,26 +54,20 @@ export default function Home() {
     const synth = window.speechSynthesis;
     if (!synth || !text) return;
 
-    // 1. पुरानी आवाज़ को तुरंत रोकें
     if (synth.speaking) {
         synth.cancel();
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
 
-    // 💡 NEW: बोलने से पहले TTS State को TRUE करें
     utterance.onstart = () => setIsTtsActive(true);
-    
-    // 💡 NEW: बोलने के बाद TTS State को FALSE करें
     utterance.onend = () => setIsTtsActive(false); 
-    utterance.onerror = () => setIsTtsActive(false); // एरर होने पर भी बंद करें
+    utterance.onerror = () => setIsTtsActive(false); 
     
-    // Voice Settings (आप इन्हें बदल सकते हैं)
     utterance.rate = 0.85; 
     utterance.pitch = 1.1; 
-    utterance.lang = 'hi-IN'; // Default language setting
+    utterance.lang = 'hi-IN';
     
-    // 2. स्टोर्ड voices से सबसे अच्छी आवाज़ चुनें
     const selectedVoice = availableVoices.find(
         (voice) => (voice.lang === 'hi-IN' && voice.name.includes('Google')) ||
                    (voice.lang === 'en-IN' && voice.name.includes('Google')) ||
@@ -85,7 +78,6 @@ export default function Home() {
         utterance.voice = selectedVoice;
     } 
 
-    // 3. आवाज़ शुरू करें
     try {
         synth.speak(utterance);
     } catch(e) {
@@ -99,6 +91,11 @@ useEffect(() => {
 
   let i = 0;
   setDisplayedResponse("");
+  
+  // पुरानी आवाज़ को तुरंत रोकें, ताकि नई आवाज़ शुरू हो सके
+  if (window.speechSynthesis && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+  }
   
   const interval = setInterval(() => {
     if (i >= response.length) {
@@ -117,10 +114,6 @@ useEffect(() => {
 
   return () => {
     clearInterval(interval);
-    // यह सुनिश्चित करें कि जब नया रिस्पॉन्स आए, तो पिछली आवाज़ कट जाए।
-    if (window.speechSynthesis && window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
-    }
   };
 }, [response]);
 
@@ -159,7 +152,6 @@ function extractCommandIfWakeWord(raw) {
     const s_lower = s.toLowerCase(); 
     const negations = ["not", "don't", "dont", "never", "no"];
     
-    // 🚨 FINAL PATTERN SET:
     const patterns = [
       "\\bhey jarvis\\b", 
       "\\bhello jarvis\\b", 
@@ -168,7 +160,7 @@ function extractCommandIfWakeWord(raw) {
       "\\butho jarvis\\b", 
       "\\butho\\b.*\\bjarvis\\b",
       "\\bjarvis\\b", 
-      "\\bsuno\\s*jarvis\\b" // FINAL FIX: Zero or more spaces (\s*)
+      "\\bsuno\\s*jarvis\\b" 
     ];
     
     const regex = new RegExp(patterns.join("|"), "i");
@@ -190,68 +182,68 @@ function extractCommandIfWakeWord(raw) {
 // 💡 NEW FUNCTION: Handles Voice Input (Speech-to-Text)
 const startListening = () => {
 
-  if (window.speechSynthesis.speaking) {
-    window.speechSynthesis.cancel();
-  }
-
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-  if (!SpeechRecognition) {
-      alert("Sorry, Sir, your browser does not support Voice Input. Please use Chrome or Edge.");
-      return;
-  }
-
-  const recognition = new SpeechRecognition();
-  recognition.continuous = false; 
-  recognition.interimResults = false; 
-  recognition.lang = 'hi-IN'; // For Hinglish
-  recognition.maxAlternatives = 1;
-
-  setLoading(true); 
-
-  recognition.onstart = () => {
-      setResponse("Listening...");
-      setDisplayedResponse("Listening...");
-  };
-
-  recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      console.log('Voice Input:', transcript);
-
-      // 1. इनपुट फ़ील्ड को भरें
-      setInput(transcript); 
-      
-      // 2. ऑटोमेटिकली कमांड सबमिट करें (फेक इवेंट ऑब्जेक्ट)
-      setTimeout(() => {
-        handleSubmit({ preventDefault: () => {} });
-      }, 300);
-  }; // <-- onresult का सही अंत
-
-  // यह onresult के बाहर है, startListening के अंदर है
-  recognition.onerror = (event) => {
-    setLoading(false);
-    setResponse("");
-    if (event.error === 'not-allowed') {
-        alert("Sir, please allow microphone access in your browser settings.");
-    } else if (event.error === 'no-speech') {
-         setDisplayedResponse("Didn't catch that, Sir. Please try again.");
-         speakResponse("I didn't catch that, Sir. Please try again.");
+    // सुनिश्चित करें कि कोई TTS चल रहा है तो वह रुक जाए
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
     }
-  }; // <-- onerror का सही अंत
 
-  recognition.onend = () => {
-      setResponse(""); 
-      setDisplayedResponse(""); 
-      //if (inputRef.current) inputRef.current.focus();
-  };
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  try {
-      recognition.start();
-  } catch (e) {
-      console.error("Error starting recognition:", e);
+    if (!SpeechRecognition) {
+        alert("Sorry, Sir, your browser does not support Voice Input. Please use Chrome or Edge.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false; 
+    recognition.interimResults = false; 
+    recognition.lang = 'hi-IN'; 
+    recognition.maxAlternatives = 1;
+
+    setLoading(true); 
+
+    recognition.onstart = () => {
+        setResponse("Listening...");
+        setDisplayedResponse("Listening...");
+    };
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        console.log('Voice Input:', transcript);
+
+        // 1. इनपुट फ़ील्ड को भरें (टेक्स्ट दिखेगा)
+        setInput(transcript); 
+        
+        // 2. ऑटोमेटिकली कमांड सबमिट करें 
+        setTimeout(() => {
+          handleSubmit({ preventDefault: () => {} });
+        }, 300);
+    }; 
+    // 👆 यह onresult का सही अंत है, इसके बाद कोई '}' नहीं है।
+
+    recognition.onerror = (event) => {
       setLoading(false);
-      alert("Error starting voice input. Is the microphone in use by another app?");
-  }
+      setResponse("");
+      if (event.error === 'not-allowed') {
+          alert("Sir, please allow microphone access in your browser settings.");
+      } else if (event.error === 'no-speech') {
+           setDisplayedResponse("Didn't catch that, Sir. Please try again.");
+           speakResponse("I didn't catch that, Sir. Please try again.");
+      }
+    }; 
+
+    recognition.onend = () => {
+        setResponse(""); 
+        setDisplayedResponse(""); 
+    };
+
+    try {
+        recognition.start();
+    } catch (e) {
+        console.error("Error starting recognition:", e);
+        setLoading(false);
+        alert("Error starting voice input. Is the microphone in use by another app?");
+    }
 };
 
 
@@ -275,7 +267,7 @@ const executeCommand = () => {
 async function handleSubmit(e) {
   e.preventDefault();
   
-  const isFakeEvent = !e.target; // Check if it's the fake event from voice input
+  const isFakeEvent = !e.target; 
   
   if (!input.trim()) {
       if (!isFakeEvent) {
@@ -284,7 +276,6 @@ async function handleSubmit(e) {
       }
   }
 
-  // Stop any ongoing speech when a new command is sent
   if (window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
   }
@@ -320,7 +311,6 @@ async function handleSubmit(e) {
 
 
   try {
-    // CRITICAL FIX: Backend को भेजने के लिए rawBackendHistory का उपयोग करें
     const historyToSend = [...rawBackendHistory, { role: "user", content : command }]; 
 
     const res = await fetch("/api/ask", {
@@ -336,7 +326,7 @@ async function handleSubmit(e) {
     finalUserFriendlyResponse = modelReply;
     uiModelContent = modelReply; 
     
-    // --- COMMAND HANDLING: Set Friendly Response & Command State ---
+    // --- COMMAND HANDLING ---
     
     if (modelReply.startsWith("__OPEN_YOUTUBE__")) {
         finalUserFriendlyResponse = "Ji Sir, main YouTube khol raha hoon. Niche diye gaye button par click kijiye, Sir.";
@@ -364,7 +354,7 @@ async function handleSubmit(e) {
         
         let displayUrl = url;
         try {
-          displayUrl = new URL(url.startsWith('http') ? url : 'https://+ url').hostname.replace('www.', ''); 
+          displayUrl = new URL(url.startsWith('http') ? url : 'https://' + url).hostname.replace('www.', ''); 
         } catch (e) { }
 
         finalUserFriendlyResponse = `Ji Sir, main aapke liye ${displayUrl} khol raha hoon. Kripya niche diye gaye button par click kijiye.`;
@@ -394,7 +384,7 @@ async function handleSubmit(e) {
   const uiModelMessage = { role: "model", content: uiModelContent}; 
   setConversationHistory(prev => [...prev, uiUserMessage, uiModelMessage]);
   
-  // 4. Start the typing animation (ALWAYS use the friendly text for UI)
+  // 4. Start the typing animation 
   setResponse(finalUserFriendlyResponse);
   
   // 5. Cleanup
@@ -482,8 +472,8 @@ return (
 
     {/* 🖊️ Input form (VIO Ready) */}
 <form onSubmit={handleSubmit} className="w-full max-w-lg space-y-4 mt-8">
-  <div className="flex space-x-2 items-center"> 
-      {/* 1. TEXTAREA CONTAINER: यहां Send बटन भी आएगा */}
+  <div className="flex space-x-2 items-end"> 
+      {/* 1. TEXTAREA CONTAINER: */}
       <div className="flex-grow relative"> 
           <textarea
               ref={inputRef} 
@@ -495,11 +485,10 @@ return (
               style={{ paddingRight: '90px' }} // बटन के लिए जगह
           />
           
-          {/* 💡 SEND BUTTON (INPUT BOX के अंदर RIGHT SIDE में) */}
+          {/* 💡 SEND BUTTON (INPUT BOX के अंदर RIGHT SIDE में - Center Fix) */}
           <button
               type="submit"
               disabled={loading || !input.trim()}
-              // absolute पोजीशनिंग हटाकर इसे फ्लेक्स में ही रखते हैं, ताकि यह टेक्स्टएरिया के बगल में आए
               className="absolute right-2 inset-y-0 my-auto w-8 h-8 flex items-center justify-center bg-blue-600 rounded-md hover:bg-blue-700 transition-colors duration-200 disabled:opacity-30 shadow-md text-white"
               title="Send"
           >
@@ -507,7 +496,7 @@ return (
           </button>
       </div>
 
-      {/* 🎙️ Microphone Button (यह अपनी जगह पर रहेगा) */}
+      {/* 🎙️ Microphone Button */}
       <button
           type="button" 
           onClick={startListening}
