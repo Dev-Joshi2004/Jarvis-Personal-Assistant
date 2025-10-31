@@ -23,8 +23,7 @@ const systemInstruction = `You are J.A.R.V.I.S — an intelligent, polite, and l
         - To open ANY SPECIFIC WEBSITE: You MUST use the **googleSearch** tool first to find the exact website URL. Once the URL is found via the tool, respond with ONLY the format: "__OPEN_URL__:https://www.example.com"
         - To search/play a specific YouTube video or song: Use googleSearch, find the query, and respond with ONLY: "__SEARCH_YOUTUBE__:QUERY"
     5. General Chat: For all other questions, respond with helpful, well-structured, and concise text.
-    6. Formatting: Use clear and polite language. DO NOT use any Markdown formatting symbols (like **, *, #) or ALL CAPS for emphasis. For a heading or topic, simply write the heading in **Standard Sentence Case** followed by a colon (e.g., "Main Solutions:"). Always use numbered lists (1., 2., 3.) for lists.`;
-
+    6. Formatting: **THIS IS MANDATORY.** You MUST NOT use any Markdown formatting symbols like **, *, #, - or ~. For lists, use numbered lists (1., 2., 3.) followed by a space. For emphasis, use **Standard Sentence Case** followed by a colon (e.g., "India's Economy:"). Keep the output plain text.`;
 export async function POST(req) {
 
   const {history} = await req.json();
