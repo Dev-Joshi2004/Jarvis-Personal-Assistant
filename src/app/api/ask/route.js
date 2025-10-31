@@ -1,127 +1,3 @@
-// import { GoogleGenerativeAI } from "@google/generative-ai";
-
-// export async function POST(req) {
-//   try {
-//     const { prompt } = await req.json();
-//     const command = (prompt || "").trim().toLowerCase();
-
-//     // 🎩 Case 1: Empty command
-//     if (!command) {
-//       return new Response(
-//         JSON.stringify({ reply: "Yes Sir — how can I assist you?" }),
-//         { status: 200, headers: { "Content-Type": "application/json" } }
-//       );
-//     }
-
-//     // 🎬 Case 2: Built-in browser commands
-//     if (command.includes("open youtube"))
-//       return new Response(JSON.stringify({ reply: "__OPEN_YOUTUBE__" }), {
-//         status: 200,
-//         headers: { "Content-Type": "application/json" },
-//       });
-//     if (command.includes("open google"))
-//       return new Response(JSON.stringify({ reply: "__OPEN_GOOGLE__" }), {
-//         status: 200,
-//         headers: { "Content-Type": "application/json" },
-//       });
-//     if (command.includes("open gmail"))
-//       return new Response(JSON.stringify({ reply: "__OPEN_GMAIL__" }), {
-//         status: 200,
-//         headers: { "Content-Type": "application/json" },
-//       });
-
-//     // 🎯 Case 3: Only trigger AI if wake word present
-//     if (!command && !prompt.toLowerCase().includes("jarvis"))
-//       {
-//       return new Response(JSON.stringify({ reply: "" }), {
-//         status: 200,
-//         headers: { "Content-Type": "application/json" },
-//       });
-//     }
-
-//     const apiKey = process.env.GEMINI_API_KEY;
-//     if (!apiKey) {
-//       throw new Error("Gemini API key missing");
-//     }
-
-//     // 🧠 Gemini AI Client
-//     const genAI = new GoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
-//     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-//     // ✍️ Better formatted prompt
-//     const formattedPrompt = `
-// You are J.A.R.V.I.S — a smart, polite, and loyal AI assistant created by your master, "Sir".
-// Always respond in clean, grammatically correct English with zero spelling mistakes.
-// Always address the user as "Sir".
-// Be confident but respectful.
-// The user said: "${prompt}"
-// `;
-
-//     const result = await model.generateContent(formattedPrompt);
-//     const text =
-//       result.response.text() || "Sorry Sir, I couldn’t generate a reply.";
-
-//     return new Response(JSON.stringify({ reply: text }), {
-//       status: 200,
-//       headers: { "Content-Type": "application/json" },
-//     });
-//   } catch (error) {
-//     console.error("Error calling Gemini:", error);
-//     return new Response(JSON.stringify({ error: "AI request failed" }), {
-//       status: 500,
-//       headers: { "Content-Type": "application/json" },
-//     });
-//   }
-// }
-
-// import { GoogleGenerativeAI } from "@google/generative-ai";
-
-// export async function POST(req) {
-//   try {
-//     const { prompt } = await req.json();
-
-//     if (!prompt) {
-//       return new Response(JSON.stringify({ error: "No prompt provided" }), {
-//         status: 400,
-//       });
-//     }
-
-//     // 🧠 Initialize Gemini client
-//     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-//     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-//     // 🗣️ Format input as Jarvis-style instruction
-//     const formattedPrompt = `
-// You are J.A.R.V.I.S — an intelligent, polite, and loyal AI assistant created by your master, "Sir".
-// Always reply in clean, grammatically correct English with zero spelling mistakes.
-// Always address the user as "Sir" and respond in a confident but respectful tone.
-// If the message doesn’t include your activation keyword ("Utho Jarvis"), do not respond at all.
-// Now, the user says: "${prompt}"
-// `;
-
-//     // 🚀 Generate response from Gemini
-//     const result = await model.generateContent(formattedPrompt);
-//     const text =
-//       result.response.text() || "Sorry Sir, I couldn’t generate a reply.";
-
-//     return new Response(JSON.stringify({ reply: text }), {
-//       status: 200,
-//       headers: { "Content-Type": "application/json" },
-//     });
-
-//   } catch (error) {
-//     console.error("Error calling Gemini:", error);
-//     return new Response(JSON.stringify({ error: "AI request failed" }), {
-//       status: 500,
-//       headers: { "Content-Type": "application/json" },
-//     });
-//   }
-// }
-
-// api/ask/route.js
-
-// api/ask/route.js
-
 import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({});
@@ -154,21 +30,32 @@ export async function POST(req) {
   const {history} = await req.json();
 
   // Time-based Greeting Logic
-  const now = new Date();
-  const hours = now.getHours();
-  let greeting;
-  if (hours < 12) {
-    greeting = "morning";
-  } else if (hours < 17) {
-    greeting = "afternoon";
-  } else {
-    greeting = "evening";
-  }
-  
-  // Dynamic System Prompt
-  const dynamicSystemInstruction = `${systemInstruction}
-CURRENT TIME GREETING: The current time suggests it is ${greeting}, Sir.`;
+  const options = {
+    timeZone: 'Asia/Kolkata', // IST Time Zone
+    hour: 'numeric',
+    hour12: false // 24-hour format (0-23)
+};
 
+// 'en-US' locale का उपयोग करें ताकि date-time string हमेशा 24 घंटे के फॉर्मेट में आए
+const istTime = new Date().toLocaleTimeString('en-US', options);
+
+// String को integer hours में बदलें
+const hours = parseInt(istTime.split(':')[0], 10); // Example: "14"
+
+let greeting;
+if (hours >= 5 && hours < 12) { // सुबह 5:00 से 11:59 तक
+  greeting = "morning";
+} else if (hours >= 12 && hours < 17) { // दोपहर 12:00 से 4:59 तक
+  greeting = "afternoon";
+} else if (hours >= 17 && hours < 22) { // शाम 5:00 से रात 9:59 तक
+  greeting = "evening";
+} else { // रात 10:00 से सुबह 4:59 तक (यानी देर रात)
+  greeting = "night";
+}
+
+// Dynamic System Prompt
+const dynamicSystemInstruction = `${systemInstruction}
+CURRENT TIME GREETING: The current time suggests it is ${greeting}, Sir.`;
 
   const geminiContents = toGeminiContent(history);
 
