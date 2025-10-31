@@ -125,16 +125,16 @@ useEffect(() => {
   const cleanedResponse = response.replace(/\*\*|__|\*/g, '').trim();
   
   const interval = setInterval(() => {
-    if (i >= response.length) {
+    if (i >= cleanedResponse.length) {
       clearInterval(interval);
-      setDisplayedResponse(response); 
+      setDisplayedResponse(cleanedResponse); 
       
-      speakResponse(response); 
+      speakResponse(cleanedResponse); 
       
       setResponse(""); 
       return;
     }
-    setDisplayedResponse((prev) => prev + response.charAt(i));
+    setDisplayedResponse((prev) => prev + cleanedResponse.charAt(i));
     i++;
   }, 25); 
 
