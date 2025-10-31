@@ -57,7 +57,6 @@ export default function Home() {
     const synth = window.speechSynthesis;
     if (!synth || !text) return;
 
-    // 🚨 TTS FIX 2: नया बोलना शुरू करने से पहले पुराना बंद करें (वैसे यह पहले से है, लेकिन ज़रूरी है)
     if (synth.speaking) {
         synth.cancel();
     }
@@ -70,24 +69,30 @@ export default function Home() {
     
     utterance.rate = 0.85; 
     utterance.pitch = 1.1; 
-    utterance.lang = 'hi-IN'; // Fallback to Hindi
+    utterance.lang = 'hi-IN'; // Default Fallback
 
-    // 🚨 Male Voice Selection Logic
     let selectedVoice = null;
     
-    // 1. सबसे पहले Google US English Male/Standard खोजें (सबसे अच्छी Male voice)
+    // 1. सबसे पहले Google US English Male/Standard खोजें
     selectedVoice = availableVoices.find(
       (voice) => voice.lang === 'en-US' && (voice.name.includes('Male') || voice.name.includes('Standard') || voice.name.includes('Google') || voice.name.includes('Alex'))
     );
 
-    // 2. अगर US Male नहीं मिलता, तो कोई भी Hindi voice चुनें 
+    // 2. अगर US Male नहीं मिलता, तो *कोई भी* English India voice खोजें (en-IN)
     if (!selectedVoice) {
         selectedVoice = availableVoices.find(
-            (voice) => voice.lang === 'hi-IN'
+            (voice) => voice.lang === 'en-IN'
         );
     }
     
-    // 3. अगर Male voice/Hindi नहीं मिलती, तो Default English voice चुनें
+    // 3. अगर English भी नहीं मिलती, तब ही Hindi पर वापस आएं
+    if (!selectedVoice) {
+        selectedVoice = availableVoices.find(
+          (voice) => voice.lang === 'hi-IN'
+        );
+    }
+
+    // 4. अगर कुछ भी नहीं मिलता, तो ब्राउज़र का डिफ़ॉल्ट English Voice चुनें
     if (!selectedVoice) {
         selectedVoice = availableVoices.find(
           (voice) => voice.default && voice.lang.startsWith('en')
@@ -95,7 +100,6 @@ export default function Home() {
     }
     
     if (selectedVoice) {
-        // अगर voice मिली है, तो उसकी lang और voice set करें
         utterance.lang = selectedVoice.lang;
         utterance.voice = selectedVoice;
     } 
@@ -217,7 +221,7 @@ const startListening = () => {
     const recognition = new SpeechRecognition();
     recognition.continuous = false; 
     recognition.interimResults = false; 
-    recognition.lang = 'hi-IN'; 
+    recognition.lang = 'en-IN'; 
     recognition.maxAlternatives = 1;
 
     setLoading(true); 
