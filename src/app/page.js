@@ -121,6 +121,8 @@ useEffect(() => {
   if (window.speechSynthesis && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
   }
+
+  const cleanedResponse = response.replace(/\*\*|__|\*/g, '').trim();
   
   const interval = setInterval(() => {
     if (i >= response.length) {
@@ -206,10 +208,6 @@ function extractCommandIfWakeWord(raw) {
 // 💡 NEW FUNCTION: Handles Voice Input (Speech-to-Text)
 const startListening = () => {
 
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-    }
-
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
@@ -217,6 +215,10 @@ const startListening = () => {
         alert("Sir, Voice Input only works reliably on Chrome, Edge, and Android browsers. Safari/iOS does not fully support this feature.");
         return;
     }
+
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
 
     const recognition = new SpeechRecognition();
     recognition.continuous = false; 
