@@ -424,8 +424,14 @@ return (
     <h1 className="text-4xl font-extrabold mb-8 text-cyan-400 drop-shadow-lg tracking-wider">{AI_NAME}</h1>
     <p className="text-gray-500 mb-6 text-sm">Artificial Intelligence Protocol</p>
 
-    {/* 🖼️ AI Visualizer (Siri Style) */}
-    <Visualizer isSpeaking={isSpeaking} />
+        <div
+          className={`
+            transition-all duration-500 ease-in-out overflow-hidden w-full max-w-lg
+            ${isSpeaking ? 'h-16 opacity-100 mb-6' : 'h-0 opacity-0 mb-0'}
+          `}
+        >
+      <Visualizer isSpeaking={isSpeaking} />
+    </div>
 
     {/* 🧍 User + AI conversation box */}
     {(conversationHistory.length > 0 || userMessage) && ( 
