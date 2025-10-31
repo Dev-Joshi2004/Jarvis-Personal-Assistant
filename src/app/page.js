@@ -1,4 +1,4 @@
-// Home.js (FINAL VERSION - PRODUCTION READY with all Voice/Refresh/Safari fixes)
+// Home.js (FINAL VERSION - ALL FIXES INCLUDED)
 "use client";
 import { useState, useEffect, useRef } from "react"; 
 import Visualizer from './components/Visualizer'; 
@@ -23,7 +23,7 @@ export default function Home() {
   const isSpeaking = loading || (response && displayedResponse.length < response.length) || isTtsActive;
 
 
-  // 💡 useEffect to load and store all available voices once
+  // 💡 useEffect to load and store all available voices once (FIX for voice stability)
   useEffect(() => {
     const synth = window.speechSynthesis;
     
@@ -45,8 +45,8 @@ export default function Home() {
       clearTimeout(timer);
       synth.removeEventListener('voiceschanged', loadVoices);
       
-      // 🚨 FIX 2: पेज अनमाउंट होने पर बोलना तुरंत बंद करें
-      if (synth && synth.speaking) {
+      // 🚨 TTS FIX 1: पेज अनमाउंट होने पर बोलना तुरंत बंद करें
+      if (synth) {
           synth.cancel();
       }
     };
@@ -57,6 +57,7 @@ export default function Home() {
     const synth = window.speechSynthesis;
     if (!synth || !text) return;
 
+    // 🚨 TTS FIX 2: नया बोलना शुरू करने से पहले पुराना बंद करें (वैसे यह पहले से है, लेकिन ज़रूरी है)
     if (synth.speaking) {
         synth.cancel();
     }
@@ -71,27 +72,25 @@ export default function Home() {
     utterance.pitch = 1.1; 
     utterance.lang = 'hi-IN'; // Fallback to Hindi
 
-    // 🚨 FIX 1: Male Voice Selection Logic को मज़बूत करें
+    // 🚨 Male Voice Selection Logic
     let selectedVoice = null;
     
     // 1. सबसे पहले Google US English Male/Standard खोजें (सबसे अच्छी Male voice)
     selectedVoice = availableVoices.find(
-        (voice) => voice.lang === 'en-US' && (voice.name.includes('Male') || voice.name.includes('Standard') || voice.name.includes('Google') || voice.name.includes('Zira'))
+      (voice) => voice.lang === 'en-US' && (voice.name.includes('Male') || voice.name.includes('Standard') || voice.name.includes('Google') || voice.name.includes('Alex'))
     );
 
-    // 2. अगर US Male नहीं मिलता, तो Google India (Male/Standard) खोजें 
-    if (!selectedVoice) {
-        selectedVoice = availableVoices.find(
-            (voice) => voice.lang === 'en-IN' && (voice.name.includes('Male') || voice.name.includes('Standard') || voice.name.includes('Google'))
-        );
-    }
-    
-    // 3. अगर Male voice नहीं मिलती, तो कोई भी Hindi या Default voice चुनें
+    // 2. अगर US Male नहीं मिलता, तो कोई भी Hindi voice चुनें 
     if (!selectedVoice) {
         selectedVoice = availableVoices.find(
             (voice) => voice.lang === 'hi-IN'
-        ) || availableVoices.find(
-            (voice) => voice.default && voice.lang.startsWith('en')
+        );
+    }
+    
+    // 3. अगर Male voice/Hindi नहीं मिलती, तो Default English voice चुनें
+    if (!selectedVoice) {
+        selectedVoice = availableVoices.find(
+          (voice) => voice.default && voice.lang.startsWith('en')
         );
     }
     
@@ -210,7 +209,7 @@ const startListening = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-        // 🚨 FIX 3: Safari/iOS के लिए स्पष्ट चेतावनी
+        // Safari/iOS के लिए स्पष्ट चेतावनी
         alert("Sir, Voice Input only works reliably on Chrome, Edge, and Android browsers. Safari/iOS does not fully support this feature.");
         return;
     }
@@ -232,7 +231,7 @@ const startListening = () => {
         const transcript = event.results[0][0].transcript;
         console.log('Voice Input:', transcript);
 
-        // इनपुट फ़ील्ड को भरें
+        // वॉइस इनपुट अब ऑटो-सबमिट नहीं होगा, केवल फील्ड भरेगा
         setInput(transcript); 
     }; 
 
@@ -296,7 +295,9 @@ async function handleSubmit(e) {
       }
   }
 
-  if (window.speechSynthesis.speaking) {
+  // 🚨 TTS FIX 3: handleSubmit (यूज़र इंटरैक्शन) पर तुरंत TTS बंद करें 
+  //   यह मोबाइल Chrome रीफ़्रेश बग को दूर करने का सबसे अच्छा तरीका है।
+  if (window.speechSynthesis && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
   }
   
@@ -424,12 +425,13 @@ return (
     <h1 className="text-4xl font-extrabold mb-8 text-cyan-400 drop-shadow-lg tracking-wider">{AI_NAME}</h1>
     <p className="text-gray-500 mb-6 text-sm">Artificial Intelligence Protocol</p>
 
-        <div
-          className={`
-            transition-all duration-500 ease-in-out overflow-hidden w-full max-w-lg
-            ${isSpeaking ? 'h-16 opacity-100 mb-6' : 'h-0 opacity-0 mb-0'}
-          `}
-        >
+    {/* 🖼️ AI Visualizer (Smooth Transition) */}
+    <div
+        className={`
+          transition-all duration-500 ease-in-out overflow-hidden w-full max-w-lg mx-auto 
+          ${isSpeaking ? 'h-35 opacity-100 mb-6' : 'h-0 opacity-0 mb-0'}
+        `}
+    >
       <Visualizer isSpeaking={isSpeaking} />
     </div>
 
