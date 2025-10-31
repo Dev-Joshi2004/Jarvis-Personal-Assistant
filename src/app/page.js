@@ -1,4 +1,4 @@
-// Home.js (FINAL VERSION - PRODUCTION READY with all latest fixes)
+// Home.js (FINAL VERSION - PRODUCTION READY with all Voice/Refresh/Safari fixes)
 "use client";
 import { useState, useEffect, useRef } from "react"; 
 import Visualizer from './components/Visualizer'; 
@@ -23,12 +23,13 @@ export default function Home() {
   const isSpeaking = loading || (response && displayedResponse.length < response.length) || isTtsActive;
 
 
-  // 💡 useEffect to load and store all available voices once (FIX for voice stability)
+  // 💡 useEffect to load and store all available voices once
   useEffect(() => {
     const synth = window.speechSynthesis;
     
     const loadVoices = () => {
         const voices = synth.getVoices();
+        // केवल hi-IN और en-US/en-IN voices को फ़िल्टर करें
         setAvailableVoices(voices.filter(v => v.lang.startsWith('hi') || v.lang.startsWith('en')));
     };
     
@@ -44,9 +45,9 @@ export default function Home() {
       clearTimeout(timer);
       synth.removeEventListener('voiceschanged', loadVoices);
       
-      // 🚨 FIX 3: पेज अनमाउंट होने (रिफ्रेश/बंद) पर बोलना तुरंत बंद करें
-      if (window.speechSynthesis && window.speechSynthesis.speaking) {
-          window.speechSynthesis.cancel();
+      // 🚨 FIX 2: पेज अनमाउंट होने पर बोलना तुरंत बंद करें
+      if (synth && synth.speaking) {
+          synth.cancel();
       }
     };
   }, []);
@@ -70,16 +71,18 @@ export default function Home() {
     utterance.pitch = 1.1; 
     utterance.lang = 'hi-IN'; // Fallback to Hindi
 
-    // 🚨 FIX 2: Male Voice Selection Logic
-    // 1. Google US Male voice खोजें
-    let selectedVoice = availableVoices.find(
-        (voice) => voice.lang === 'en-US' && (voice.name.includes('Male') || voice.name.includes('Standard'))
+    // 🚨 FIX 1: Male Voice Selection Logic को मज़बूत करें
+    let selectedVoice = null;
+    
+    // 1. सबसे पहले Google US English Male/Standard खोजें (सबसे अच्छी Male voice)
+    selectedVoice = availableVoices.find(
+        (voice) => voice.lang === 'en-US' && (voice.name.includes('Male') || voice.name.includes('Standard') || voice.name.includes('Google') || voice.name.includes('Zira'))
     );
 
     // 2. अगर US Male नहीं मिलता, तो Google India (Male/Standard) खोजें 
     if (!selectedVoice) {
         selectedVoice = availableVoices.find(
-            (voice) => voice.lang === 'en-IN' && (voice.name.includes('Male') || voice.name.includes('Standard'))
+            (voice) => voice.lang === 'en-IN' && (voice.name.includes('Male') || voice.name.includes('Standard') || voice.name.includes('Google'))
         );
     }
     
@@ -88,12 +91,12 @@ export default function Home() {
         selectedVoice = availableVoices.find(
             (voice) => voice.lang === 'hi-IN'
         ) || availableVoices.find(
-            (voice) => voice.default
+            (voice) => voice.default && voice.lang.startsWith('en')
         );
     }
     
     if (selectedVoice) {
-        // अगर Hindi voice मिली है, तो lang को Hindi पर सेट करें, नहीं तो English (US/IN) पर
+        // अगर voice मिली है, तो उसकी lang और voice set करें
         utterance.lang = selectedVoice.lang;
         utterance.voice = selectedVoice;
     } 
@@ -207,7 +210,8 @@ const startListening = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-        alert("Sorry, Sir, your browser does not support Voice Input. Please use Chrome or Edge.");
+        // 🚨 FIX 3: Safari/iOS के लिए स्पष्ट चेतावनी
+        alert("Sir, Voice Input only works reliably on Chrome, Edge, and Android browsers. Safari/iOS does not fully support this feature.");
         return;
     }
 
@@ -228,10 +232,8 @@ const startListening = () => {
         const transcript = event.results[0][0].transcript;
         console.log('Voice Input:', transcript);
 
-        // 🚨 FIX 1: इनपुट फ़ील्ड को भरें, लेकिन ऑटोमैटिकली सबमिट न करें।
+        // इनपुट फ़ील्ड को भरें
         setInput(transcript); 
-        
-        // setLoading को यहीं false न करें, recognition.onend में करेंगे
     }; 
 
     recognition.onerror = (event) => {
@@ -246,12 +248,10 @@ const startListening = () => {
     }; 
 
     recognition.onend = () => {
-        // Voice input पूरा होने पर UI को साफ़ करें, लेकिन input को नहीं
         setLoading(false); 
         setResponse(""); 
         setDisplayedResponse(""); 
         
-        // Voice Input के बाद, फोकस इनपुट फील्ड पर वापस लाएं
         if (inputRef.current) {
             inputRef.current.focus();
         }
@@ -492,7 +492,7 @@ return (
 
     {/* 🖊️ Input form (VIO Ready) */}
 <form onSubmit={handleSubmit} className="w-full max-w-lg space-y-4 mt-8">
-  <div className="flex space-x-2 items-end"> 
+  <div className="flex space-x-2 items-center"> 
       {/* 1. TEXTAREA CONTAINER: */}
       <div className="flex-grow relative"> 
           <textarea
