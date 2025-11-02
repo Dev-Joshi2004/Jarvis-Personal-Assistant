@@ -226,8 +226,6 @@ const startListening = () => {
     recognition.lang = 'en-IN'; 
     recognition.maxAlternatives = 1;
 
-    setLoading(true); 
-
     recognition.onstart = () => {
         setDisplayedResponse("Listening...");
     };
@@ -241,7 +239,6 @@ const startListening = () => {
     }; 
 
     recognition.onerror = (event) => {
-      setLoading(false);
       setResponse("");
       if (event.error === 'not-allowed') {
           alert("Sir, please allow microphone access in your browser settings.");
@@ -252,7 +249,6 @@ const startListening = () => {
     }; 
 
     recognition.onend = () => {
-        setLoading(false); 
         setResponse(""); 
         setDisplayedResponse(""); 
         
@@ -265,7 +261,6 @@ const startListening = () => {
         recognition.start();
     } catch (e) {
         console.error("Error starting recognition:", e);
-        setLoading(false);
         alert("Error starting voice input. Is the microphone in use by another app?");
     }
 };
