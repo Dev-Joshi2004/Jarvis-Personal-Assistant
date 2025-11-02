@@ -229,7 +229,6 @@ const startListening = () => {
     setLoading(true); 
 
     recognition.onstart = () => {
-        setResponse("Listening...");
         setDisplayedResponse("Listening...");
     };
 
